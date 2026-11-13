@@ -335,7 +335,11 @@ function delM(id) { ask('Hapus data master ini? Riwayat transaksi tidak berubah.
 /* ----- Pengaturan ----- */
 async function pSet() {
   const r = await api('cfg'); if (!r.ok) return; const c = r.data;
-  A(hd('Pengaturan', 1) + `<div class="cd p-3 mb-3"><h2 class="h6">Identitas Desa</h2>
+  A(hd('Pengaturan', 1) + `<div class="cd p-3 mb-3"><h2 class="h6">Saldo Awal</h2><p class="mu small">Saldo sebelum transaksi pertama yang dicatat. Mengubahnya menghitung ulang seluruh saldo berjalan.</p>
+  <label class="lb" for="sa1">Saldo awal kas bank (Rp)</label><input id="sa1" class="form-control mb-2" inputmode="numeric" oninput="fm(this)" value="${fmt(c.saldo_awal_bank)}">
+  <label class="lb" for="sa2">Saldo awal kas tunai (Rp)</label><input id="sa2" class="form-control mb-3" inputmode="numeric" oninput="fm(this)" value="${fmt(c.saldo_awal_tunai)}">
+  <button class="btn btn-pri w-100" onclick="svSaldo()">Simpan Saldo Awal</button></div>
+  <div class="cd p-3 mb-3"><h2 class="h6">Identitas Desa</h2>
   <label class="lb" for="c1">Nama desa</label><input id="c1" class="form-control mb-2" value="${esc(c.nama_desa)}" maxlength="80">
   <label class="lb" for="c2">Kop laporan (tiap baris = satu baris kop)</label><textarea id="c2" class="form-control mb-2" rows="3" maxlength="300">${esc(c.kop)}</textarea>
   <label class="lb" for="c3">Nama bendahara</label><input id="c3" class="form-control mb-2" value="${esc(c.bendahara)}" maxlength="80">
@@ -349,6 +353,7 @@ async function pSet() {
   <button class="btn btn-outline-pri w-100" onclick="svPw()">Ganti Password</button></div>`);
 }
 async function svCfg() { const r = await api('w_cfg', { nama_desa: $('#c1').value.trim(), kop: $('#c2').value, bendahara: $('#c3').value.trim(), logo: $('#c4').value.trim(), folder_id: $('#c6').value.trim() }); if (r.ok) toast('Pengaturan tersimpan'); }
+async function svSaldo() { const r = await api('w_cfg', { saldo_awal_bank: num($('#sa1').value), saldo_awal_tunai: num($('#sa2').value) }); if (r.ok) toast('Saldo awal tersimpan'); }
 async function svPw() { const r = await api('w_pw', { lama: $('#w1').value, baru: $('#w2').value }); if (r.ok) { toast('Password diganti'); $('#w1').value = $('#w2').value = ''; } }
 
 /* ----- Lainnya & Panduan ----- */
