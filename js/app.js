@@ -75,12 +75,13 @@ async function api(action, data) {
 
 /* ----- Router ----- */
 const PAGES = { login: pLogin, home: pHome, kas: pKas, tarik: pTarik, dana: pDana, more: pMore, pajak: pPajak, laporan: pLaporan, master: pMaster, set: pSet, panduan: pPanduan };
+const TOP = ['home', 'kas', 'tarik', 'dana', 'more'];
 function navigateTo(p, o) {
   o = o || {};
-  if (AppState.currentPage && !o.noHistory && AppState.currentPage !== p) AppState.pageHistory.push(AppState.currentPage);
+  if (TOP.includes(p)) AppState.pageHistory = [];
+  else if (AppState.currentPage && !o.noHistory && AppState.currentPage !== p && p !== 'login') AppState.pageHistory.push(AppState.currentPage);
   AppState.currentPage = p;
-  if (p === 'login') history.replaceState(null, '', location.pathname + location.search);
-  else if (!o.fromHash && location.hash !== '#/' + p) location.hash = '#/' + p;
+  history.replaceState(history.state, '', p === 'login' ? location.pathname + location.search : '#/' + p);
   document.body.classList.toggle('noauth', p === 'login');
   const grp = ['pajak', 'laporan', 'master', 'set', 'panduan'].includes(p) ? 'more' : p;
   document.querySelectorAll('#nv button').forEach(b => b.classList.toggle('on', b.dataset.p === grp));
@@ -110,7 +111,7 @@ async function doLogin(e) {
     if (!j.success) return toast(j.message, 'danger');
     setTk(j.data.token); MEM = {};
     MEM['dash{}'] = { d: j.data.dash, t: Date.now(), pg: 'home', s: JSON.stringify(j.data.dash) }; // bootstrap
-    navigateTo('home', { noHistory: true });
+    navigateTo('home', { noHistory: true }); initTrap();
   } catch (x) { ld(0); toast(em(x), 'danger'); }
 }
 
@@ -120,7 +121,8 @@ async function pHome() {
   const r = await api('dash'); if (!r.ok) return;
   const d = r.data, ic = { ok: 'bi-check-circle', warn: 'bi-exclamation-triangle', info: 'bi-info-circle' };
   A(hd(esc(d.desa), 0, '<button class="ib" aria-label="Ganti tema" onclick="theme()"><i class="bi bi-circle-half"></i></button>') +
-    `<div class="gr">${st('Saldo Kas Bank', d.bank, 'bi-bank', 'pri')}${st('Saldo Kas Tunai', d.tunai, 'bi-cash-stack', 'pri')}${st('Pajak Belum Disetor', d.pajak, 'bi-receipt', 'wn')}${st('Belum Cair Siskeudes', d.belum, 'bi-hourglass-split', 'er')}</div>
+    `<div class="hero"><small>Total Kas</small><div class="hn">${rp(d.bank + d.tunai)}</div><div class="hs"><div><small><i class="bi bi-bank"></i> Kas Bank</small><b>${rp(d.bank)}</b></div><div><small><i class="bi bi-cash-stack"></i> Kas Tunai</small><b>${rp(d.tunai)}</b></div></div></div>
+    <div class="gr">${st('Pajak Belum Disetor', d.pajak, 'bi-receipt', 'wn')}${st('Belum Cair Siskeudes', d.belum, 'bi-hourglass-split', 'er')}</div>
     <div class="cd p-3 mt-3"><h2 class="h6">Arus Kas Bulanan (Bank)</h2><div style="height:220px"><canvas id="ch" role="img" aria-label="Grafik arus kas bulanan"></canvas></div></div>
     <div class="cd p-3 mt-3"><h2 class="h6">Insight</h2>${d.ins.map(i => `<div class="in ${i.t}"><i class="bi ${ic[i.t]}"></i><span>${esc(i.s)}</span></div>`).join('')}</div>`);
   if (!d.ch.length) return;
@@ -141,7 +143,7 @@ async function pKas() {
   $('#ls').innerHTML = r.data.length ? r.data.map(x => {
     const m = t == 'bank' ? (x.jenis == 'Masuk' ? x.nominal : -x.nominal) : (x.masuk - x.keluar);
     const del = t == 'bank' ? !x.id_penarikan : !/^[TKP]-/.test(x.id);
-    return `<div class="cd it"><div class="fl"><div><b>${esc(x.uraian)}</b><small class="mu d-block">${tgl(x.tanggal)}${x.kategori ? ' · ' + esc(x.kategori) : ''}</small></div>
+    return `<div class="cd it"><div class="fl"><div class="ti ${m >= 0 ? 'up' : 'dn'}"><i class="bi ${m >= 0 ? 'bi-arrow-down-left' : 'bi-arrow-up-right'}"></i></div><div class="fx"><b>${esc(x.uraian)}</b><small class="mu d-block">${tgl(x.tanggal)}${x.kategori ? ' · ' + esc(x.kategori) : ''}</small></div>
     <div class="text-end"><b class="${m >= 0 ? 'ok' : 'er'}">${m >= 0 ? '+' : '−'}${rp(Math.abs(m))}</b><small class="mu d-block">Saldo ${rp(x.saldo)}</small></div></div>
     ${del ? `<div class="text-end"><button class="btn btn-sm mu" aria-label="Hapus transaksi" onclick="delKas('${x.id}')"><i class="bi bi-trash"></i> Hapus</button></div>` : ''}</div>`;
   }).join('') : empty('Belum ada transaksi');
@@ -369,15 +371,29 @@ function pPanduan() {
 }
 
 /* ----- Mulai ----- */
-window.addEventListener('hashchange', () => {
-  const p = location.hash.replace('#/', '');
-  if (AppState.sessionToken && PAGES[p] && p !== 'login' && p !== AppState.currentPage) navigateTo(p, { noHistory: true, fromHash: true });
+/* Tombol Back (Android): tutup modal -> mundur halaman -> ke Beranda -> tekan 2x untuk keluar */
+let exiting = false, lastBack = 0;
+function initTrap() {
+  const s = history.state, u = location.pathname + location.search + '#/' + AppState.currentPage;
+  if (s && s.app) return;
+  if (!(s && s.guard)) history.replaceState({ guard: 1 }, '', u);
+  history.pushState({ app: 1 }, '', u);
+}
+window.addEventListener('popstate', () => {
+  if (exiting || !AppState.sessionToken) return;
+  history.pushState({ app: 1 }, '', '#/' + AppState.currentPage); // pasang kembali penahan
+  if ($('#dlg').open) return closeM();
+  if (AppState.pageHistory.length) return goBack();
+  if (AppState.currentPage !== 'home') return navigateTo('home', { noHistory: true });
+  const n = Date.now();
+  if (n - lastBack < 2000) { exiting = true; history.go(-2); setTimeout(() => { exiting = false; }, 800); }
+  else { lastBack = n; toast('Tekan sekali lagi untuk keluar'); }
 });
 window.addEventListener('offline', () => toast('Anda sedang offline', 'danger'));
 window.addEventListener('online', () => toast('Kembali online'));
 (function () {
   let t, k; try { t = localStorage.getItem('th'); k = sessionStorage.getItem('tk'); } catch (e) {}
   setTheme(t || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
-  if (k) { AppState.sessionToken = k; const p = location.hash.replace('#/', ''); navigateTo(PAGES[p] && p !== 'login' ? p : 'home', { noHistory: true }); }
+  if (k) { AppState.sessionToken = k; const p = location.hash.replace('#/', ''); navigateTo(PAGES[p] && p !== 'login' ? p : 'home', { noHistory: true }); initTrap(); }
   else navigateTo('login', { noHistory: true });
 })();
